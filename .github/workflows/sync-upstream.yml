@@ -1,0 +1,45 @@
+name: Sync upstream
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ github.token }}
+      - name: Pull upstream and retain allowed paths
+        env:
+          TARGET_BRANCH: ${{ github.ref_name }}
+          UPSTREAM_URL: https://github.com/JuliusBrussee/caveman
+          UPSTREAM_BRANCH: main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git pull --no-rebase --strategy=ours --no-commit --no-ff "$UPSTREAM_URL" "$UPSTREAM_BRANCH"
+          git restore --source=FETCH_HEAD --staged --worktree -- skills ':(top,glob)LICENSE*'
+          git rm -r --ignore-unmatch -- . ':(exclude)skills' ':(top,glob,exclude)LICENSE*' ':(exclude).github/workflows'
+          test -d skills && test -d .github/workflows && test -f LICENSE
+          for license in LICENSE*; do
+            test -f "$license" && test ! -L "$license"
+          done
+          test -z "$(find . -mindepth 1 -maxdepth 1 ! -name .git ! -name .github ! -name skills ! -name 'LICENSE*' -print -quit)"
+          test -z "$(find .github -mindepth 1 -maxdepth 1 ! -name workflows -print -quit)"
+          if git rev-parse --verify --quiet MERGE_HEAD >/dev/null || ! git diff --cached --quiet; then
+            git commit -m "chore: sync upstream skills"
+            git push origin "HEAD:$TARGET_BRANCH"
+          fi
