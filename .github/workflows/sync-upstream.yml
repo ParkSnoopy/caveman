@@ -16,11 +16,12 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: actions/checkout@v4 - Check Out Fork
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ github.token }}
-      - name: Pull upstream and retain allowed paths
+      - name: bash - Merge Upstream and Retain Allowed Paths
         env:
           TARGET_BRANCH: ${{ github.ref_name }}
           UPSTREAM_URL: https://github.com/JuliusBrussee/caveman
@@ -30,9 +31,11 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git pull --no-rebase --strategy=ours --no-commit --no-ff "$UPSTREAM_URL" "$UPSTREAM_BRANCH"
-          git restore --source=FETCH_HEAD --staged --worktree -- skills ':(top,glob)LICENSE*'
-          git rm -r --ignore-unmatch -- . ':(exclude)skills' ':(top,glob,exclude)LICENSE*' ':(exclude).github/workflows'
+          git fetch "$UPSTREAM_URL" "$UPSTREAM_BRANCH"
+          git merge --no-commit --no-ff FETCH_HEAD
+          git restore --source=HEAD --staged --worktree -- .github/workflows
+          git rm -r --force --ignore-unmatch -- . ':(exclude)skills' ':(top,glob,exclude)LICENSE*' ':(exclude).github/workflows'
+
           test -d skills && test -d .github/workflows && test -f LICENSE
           for license in LICENSE*; do
             test -f "$license" && test ! -L "$license"
